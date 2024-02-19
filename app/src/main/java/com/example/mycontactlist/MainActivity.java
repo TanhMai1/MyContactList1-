@@ -1,13 +1,21 @@
 package com.example.mycontactlist;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentManager;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.telephony.PhoneNumberFormattingTextWatcher;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
 import android.view.View;
@@ -20,11 +28,18 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import com.google.android.material.snackbar.Snackbar;
+
 import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity implements DatePickerDialog.SaveDateListener {
 
     private Contact currentContact;
+
+    final int PERMISSION_REQUEST_PHONE = 102;
+    final int PERMISSION_REQUEST_CAMERA = 103;
+    final int CAMERA_REQUEST = 1888;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +54,7 @@ public class MainActivity extends AppCompatActivity implements DatePickerDialog.
         initChangeDateButton();
         initTextChangedEvents();
         initSaveButton();
+        initCallFunction();
 
         Bundle extras = getIntent().getExtras();
         if(extras != null) {
@@ -96,6 +112,90 @@ public class MainActivity extends AppCompatActivity implements DatePickerDialog.
         });
     }
 
+    private void initCallFunction() {
+        EditText editPhone = (EditText) findViewById(R.id.editHome);
+        editPhone.setOnLongClickListener(new View.OnLongClickListener() {
+
+            @Override
+            public boolean onLongClick(View arg0) {
+                checkPhonePermission(currentContact.getPhoneNumber());
+                return false;
+            }
+        });
+
+        EditText editCell = (EditText) findViewById(R.id.editCell);
+        editCell.setOnLongClickListener(new View.OnLongClickListener() {
+
+            @Override
+            public boolean onLongClick(View arg0) {
+                checkPhonePermission(currentContact.getCellNumber());
+                return false;
+            }
+        });
+    }
+
+    private void checkPhonePermission(String phoneNumber) {
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (ContextCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+
+                if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, android.Manifest.permission.CALL_PHONE)) {
+
+                    Snackbar.make(findViewById(R.id.activity_main), "MyContactList requires this permission to place a call from the app.", Snackbar.LENGTH_INDEFINITE).setAction("OK", new View.OnClickListener() {
+                                @Override
+                                public void onClick(View view) {
+                                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.CALL_PHONE },PERMISSION_REQUEST_PHONE);
+                                }
+                            })
+                            .show();
+                } else {
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.CALL_PHONE},PERMISSION_REQUEST_PHONE);
+                }
+            } else {
+                callContact(phoneNumber);
+            }
+        } else {
+            callContact(phoneNumber);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
+
+        switch (requestCode) {
+            case PERMISSION_REQUEST_PHONE: {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(MainActivity.this, "You may now call from this app.", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(MainActivity.this, "You will not be able to make calls “ +“from this app", Toast.LENGTH_LONG).show();
+                }
+            }
+            case PERMISSION_REQUEST_CAMERA: {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    takePhoto();
+                } else {
+                    Toast.makeText(MainActivity.this, "You will not be able to save contact pictures from this app", Toast.LENGTH_LONG).show();
+                }
+                return;
+            }
+        }
+    }
+
+    public void takePhoto(){
+        Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        startActivityForResult(cameraIntent, CAMERA_REQUEST);
+    }
+
+    private void callContact(String phoneNumber) {
+        Intent intent = new Intent(Intent.ACTION_CALL);
+        intent.setData(Uri.parse("tel:" + phoneNumber));
+        if ( Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(getBaseContext(), android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            return  ;
+        }
+        else {
+            startActivity(intent);
+        }
+    }
+
     private void setForEditing(boolean enabled) {
         EditText editName = findViewById(R.id.editName);
         EditText editAddress = findViewById(R.id.editAddress);
@@ -113,19 +213,24 @@ public class MainActivity extends AppCompatActivity implements DatePickerDialog.
         editCity.setEnabled(enabled);
         editState.setEnabled(enabled);
         editZipCode.setEnabled(enabled);
-        editPhone.setEnabled(enabled);
-        editCell.setEnabled(enabled);
         editEmail.setEnabled(enabled);
         buttonChange.setEnabled(enabled);
         buttonSave.setEnabled(enabled);
 
         if (enabled) {
             editName.requestFocus();
+            editPhone.setInputType(InputType.TYPE_CLASS_PHONE);
+            editCell.setInputType(InputType.TYPE_CLASS_PHONE);
         }
         else {
             ScrollView s = findViewById(R.id.scrollView);
             s.fullScroll(ScrollView.FOCUS_UP);
+            editPhone.setInputType(InputType.TYPE_NULL);
+            editCell.setInputType(InputType.TYPE_NULL);
         }
+
+        ImageButton picture = findViewById(R.id.imageContact);
+        picture.setEnabled(enabled);
 
     }
 
